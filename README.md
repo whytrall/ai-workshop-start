@@ -13,7 +13,8 @@ build-tools-bump-gradle-api — Bumps the Gradle API version that Kotlin Gradle 
 …
 ```
 
-`./skill-atlas web` serves the same as a web page, styled like 2003, on http://127.0.0.1:8000/.
+`./skill-atlas web` serves the same as a web page, styled like 2003, on http://127.0.0.1:8000/;
+http://127.0.0.1:8000/org scans every repository of a GitHub organization at once, with a progress bar.
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 

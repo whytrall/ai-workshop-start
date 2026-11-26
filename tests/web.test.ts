@@ -12,7 +12,7 @@ import { createBrowserBackend } from '../src/browser.ts';
 import { serveWeb } from '../src/web.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
 
-const server = await serveWeb({ open, port: 0 });
+const server = await serveWeb({ open, github: { fetch: () => Promise.reject(new Error('offline')) }, port: 0 });
 after(() => server.close());
 
 /** The page for `/?repo=<repo>`, or for a path. */
