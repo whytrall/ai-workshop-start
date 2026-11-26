@@ -189,3 +189,86 @@ test('web where no server can run, as in the browser terminal → a clear messag
   assert.equal(output, 'The web view runs only from the command line: ./skill-atlas web');
   assert.match(await createBrowserBackend().run('help'), /web \[port\]\s+open the web view/);
 });
+
+/** The rows of a search's result, as text, with the highlights dropped. */
+const found = (html: string) => rows(html.replace(/<\/?mark>/g, ''));
+
+/** The page for `/?repo=<repo>&q=<q>`. */
+async function search(repo: string, q: string) {
+  const url = new URL(server.url);
+  url.searchParams.set('repo', repo);
+  url.searchParams.set('q', q);
+  const response = await fetch(url);
+  return { status: response.status, html: await response.text() };
+}
+
+test('search: the field at the top, under the repository field, then the results', async () => {
+  const home = await page();
+  assert.match(home.html, /<input id="repo"[^>]*>[\s\S]*<input id="q" name="q" type="text" size="48" value=""/);
+  const { html } = await search(FIXTURE, 'commit');
+  assert.ok(html.indexOf('id="q"') < html.indexOf('class="skills"'));
+  assert.match(html, /<input id="q" name="q" type="text" size="48" value="commit"/);
+});
+
+test('search: by name or description, ignoring case, the matches highlighted and renumbered', async () => {
+  // "commit" is in the name of commits and in the description of code-style ("committing").
+  const { status, html } = await search(FIXTURE, '  COMMIT ');
+  assert.equal(status, 200);
+  assert.deepEqual(found(html), [
+    "1 code-style Follow the project&#39;s code style. Use before committing Kotlin or Java changes.",
+    '2 commits Write commit messages the way this repository does. Use for every commit.',
+  ]);
+  assert.ok(html.includes('Use before <mark>commit</mark>ting Kotlin'));
+  assert.ok(html.includes('><mark>commit</mark>s</a>'));
+  // Every match in a text, keeping its own case.
+  assert.ok(html.includes('Write <mark>commit</mark> messages the way this repository does. Use for every <mark>commit</mark>.'));
+  assert.match(html, /<h2 class="repo"><a [^>]*>fixture<\/a> &middot; 3 skills<\/h2>/);
+  assert.match(html, /<div class="search">2 of 3 skills match &quot;<b>COMMIT<\/b>&quot; &middot; <a href="\/\?repo=[^"]*fixture">show all<\/a><\/div>/);
+  // The counter counts the skills on the page.
+  assert.match(html, /<span class="counter">(<span>0<\/span>){5}<span>2<\/span><\/span>/);
+  // A skill without a description matches by its name.
+  const one = await search(FIXTURE, 'checklist');
+  assert.deepEqual(found(one.html), ['1 release-checklist (no description)']);
+  assert.match(one.html, /release-<mark>checklist<\/mark><\/a>/);
+  assert.match(one.html, /1 of 3 skills matches/);
+});
+
+test('search: no match → No skills match, the warnings still shown', async () => {
+  const { status, html } = await search(FIXTURE, 'guestbook');
+  assert.equal(status, 200);
+  assert.deepEqual(found(html), []);
+  assert.match(html, /<p class="none">No skills match &quot;guestbook&quot;<\/p>/);
+  assert.match(html, /0 of 3 skills match/);
+  assert.match(html, /class="warnings"/);
+  assert.match(html, /<span class="counter">(<span>0<\/span>){6}<\/span>/);
+});
+
+test('search: empty shows every skill; without a repository it is the home page', async () => {
+  const all = await search(FIXTURE, '   ');
+  assert.equal(found(all.html).length, 3);
+  assert.doesNotMatch(all.html, /<mark>|class="search"/);
+  assert.equal((await search('', 'commit')).html, (await page()).html);
+});
+
+test('search: the text is literal and HTML-escaped, in the matches and in the field', async (t) => {
+  const root = project(t, {
+    '.claude/skills/a/SKILL.md': '---\nname: "a.b <i> & (c)"\ndescription: "Costs $5 * 2."\n---\n',
+    '.claude/skills/b/SKILL.md': '---\nname: axb\ndescription: Nothing special.\n---\n',
+  });
+  // "." is not "any character": axb does not match.
+  const dot = await search(root, 'a.b');
+  assert.deepEqual(found(dot.html).map((row) => row.split(' ')[1]), ['a.b']);
+  assert.ok(dot.html.includes('<mark>a.b</mark> &#60;i&#62; &#38; (c)'));
+  const tag = await search(root, '<i> & (');
+  assert.doesNotMatch(tag.html, /<i>/);
+  assert.ok(tag.html.includes('a.b <mark>&#60;i&#62; &#38; (</mark>c)'));
+  assert.ok(tag.html.includes('value="&#60;i&#62; &#38; ("'));
+  const symbols = await search(root, '$5 *');
+  assert.ok(symbols.html.includes('Costs <mark>$5 *</mark> 2.'));
+});
+
+test('search: a failed scan keeps the search in the field', async () => {
+  const { status, html } = await search(join(FIXTURE, 'no-such-directory'), 'x"y');
+  assert.equal(status, 400);
+  assert.ok(html.includes('id="q" name="q" type="text" size="48" value="x&#34;y"'));
+});
