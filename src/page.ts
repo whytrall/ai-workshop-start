@@ -9,19 +9,20 @@ import type { ScanResult } from './core/scan.ts';
 /** What the page shows: a form alone, a scan's result, or why the scan failed. */
 export type PageState =
   | { kind: 'home' }
-  | { kind: 'result'; input: string; result: ScanResult }
-  | { kind: 'error'; input: string; message: string }
+  | { kind: 'result'; input: string; query: string; result: ScanResult }
+  | { kind: 'error'; input: string; query: string; message: string }
   | { kind: 'org-home' }
   | { kind: 'org-error'; input: string; message: string }
   | { kind: 'not-found'; path: string };
 
 export function renderPage(state: PageState): string {
   const input = 'input' in state ? state.input : '';
+  const query = 'query' in state ? state.query : '';
   const title = state.kind === 'result' ? `${state.result.repository.id} - Skill Atlas` : 'Skill Atlas';
   const kind = state.kind === 'org-home' || state.kind === 'org-error' ? 'org' : 'repo';
-  return `${top(title, form(kind, input))}
+  return `${top(title, form(kind, input, query))}
   ${content(state)}
-${bottom(state.kind === 'result' ? state.result.skills.length : 0)}`;
+${bottom(state.kind === 'result' ? filterSkills(state.result.skills, query).length : 0)}`;
 }
 
 /** Everything above what the page shows, up to its main cell. */
@@ -70,8 +71,8 @@ function bottom(skills: number): string {
 `;
 }
 
-/** The one field: a repository at `/`, an organization at `/org`. */
-function form(kind: 'repo' | 'org', input: string): string {
+/** The form: a repository and a search of the skills at `/`, an organization at `/org`. */
+function form(kind: 'repo' | 'org', input: string, query = ''): string {
   if (kind === 'org') {
     return `<form id="scan" class="scan" method="get" action="/org">
     <fieldset>
@@ -87,7 +88,9 @@ function form(kind: 'repo' | 'org', input: string): string {
       <legend>Scan a repository</legend>
       <label for="repo">GitHub URL or directory:</label><br>
       <input id="repo" name="repo" type="text" size="48" value="${escapeHtml(input)}" placeholder="https://github.com/owner/repo">
-      <input type="submit" value="Scan!">
+      <input type="submit" value="Scan!"><br>
+      <label for="q">Search the skills:</label><br>
+      <input id="q" name="q" type="text" size="48" value="${escapeHtml(query)}" placeholder="name or description">
     </fieldset>
   </form>`;
 }
@@ -104,37 +107,66 @@ function content(state: PageState): string {
     case 'not-found':
       return `<div class="error"><div class="error-title">404 - Page Not Found</div>There is no page at ${escapeHtml(state.path)}. <a href="/">Go home</a>.</div>`;
     case 'result':
-      return result(state.result);
+      return result(state.result, state.input, state.query);
   }
 }
 
-function result({ repository, skills, warnings }: ScanResult): string {
+function result({ repository, skills, warnings }: ScanResult, input: string, query: string): string {
   const count = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
   const commit = repository.commit ? `<div class="commit">Scanned commit: <tt>${escapeHtml(repository.commit)}</tt></div>` : '';
-  const rows = skills.map((skill, index) => row(repository, skill, index)).join('\n');
-  const table = skills.length
+  const shown = filterSkills(skills, query);
+  const rows = shown.map((skill, index) => row(repository, skill, index, query)).join('\n');
+  const searched = query && skills.length
+    ? `<div class="search">${shown.length} of ${count} ${shown.length === 1 ? 'matches' : 'match'} &quot;<b>${escapeHtml(query)}</b>&quot; &middot; <a href="/?repo=${escapeHtml(encodeURIComponent(input))}">show all</a></div>`
+    : '';
+  const table = shown.length
     ? `<table class="skills" border="1" cellspacing="0" cellpadding="4">
 <tr><th>#</th><th>Skill</th><th>Description</th></tr>
 ${rows}
 </table>`
-    : `<p class="none">No skills here... yet!</p>`;
+    : skills.length
+      ? `<p class="none">No skills match &quot;${escapeHtml(query)}&quot;</p>`
+      : `<p class="none">No skills here... yet!</p>`;
   const warningList = warnings.length
     ? `<div class="warnings"><span class="blink">!! Warning !!</span><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
     : '';
   return `<h2 class="repo"><a href="${escapeHtml(repository.url)}">${escapeHtml(repository.id)}</a> &middot; ${count}</h2>
 ${commit}
+${searched}
 ${table}
 ${warningList}`;
 }
 
-function row(repository: ScanResult['repository'], skill: Skill, index: number): string {
+function row(repository: ScanResult['repository'], skill: Skill, index: number, query: string): string {
   const link = skillLink(repository, skill);
   const copies = skill.copies.length ? `<div class="copies">also in ${skill.copies.map(escapeHtml).join(', ')}</div>` : '';
   return `<tr class="${index % 2 ? 'odd' : 'even'}">
 <td class="n">${index + 1}</td>
-<td class="name"><a href="${escapeHtml(link)}">${escapeHtml(skill.name)}</a>${copies}</td>
-<td class="description">${skill.description ? escapeHtml(skill.description) : '<i>(no description)</i>'}</td>
+<td class="name"><a href="${escapeHtml(link)}">${highlight(skill.name, query)}</a>${copies}</td>
+<td class="description">${skill.description ? highlight(skill.description, query) : '<i>(no description)</i>'}</td>
 </tr>`;
+}
+
+/** The skills whose name or description contains the query, ignoring case; all of them for no query. */
+export function filterSkills(skills: Skill[], query: string): Skill[] {
+  if (!query) return skills;
+  const pattern = matcher(query);
+  return skills.filter((skill) => pattern.test(skill.name) || pattern.test(skill.description));
+}
+
+/** The text, HTML-escaped, with every match of the query, ignoring case, in a <mark>. */
+export function highlight(text: string, query: string): string {
+  if (!query) return escapeHtml(text);
+  return text
+    .split(matcher(query, true))
+    .map((part, index) => (index % 2 ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part)))
+    .join('');
+}
+
+/** The query as a literal, case-insensitive pattern; captured, for split to keep the matches. */
+function matcher(query: string, capture = false): RegExp {
+  const literal = query.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+  return new RegExp(capture ? `(${literal})` : literal, 'iu');
 }
 
 /** The odometer counts the skills on this page: there is nothing stored to count visitors with. */
@@ -275,6 +307,8 @@ input[type=submit]:active { border-style: inset; }
 .copies { font-weight: normal; font-size: 10px; color: #ccc; }
 .description { color: #fff; }
 .none { text-align: center; font-size: 16px; }
+.search { margin-bottom: 8px; color: #00ff00; }
+mark { background: #ff00ff; color: #ffff00; font-weight: bold; }
 .warnings { margin-top: 12px; padding: 6px; background: #ffff99; color: #990000; border: 3px double #990000; }
 .blink { font-weight: bold; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { visibility: hidden; } }

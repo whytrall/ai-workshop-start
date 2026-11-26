@@ -30,7 +30,7 @@ export async function serveWeb(options: WebOptions): Promise<WebServer> {
   const github = { ...options.github, limit: options.rateLimit ?? rateLimit() };
   const server = createServer((request, response) => {
     handle(request, response, options.open, github).catch((error) => {
-      if (!response.headersSent) send(response, 500, { kind: 'error', input: '', message: `Unexpected error: ${String(error)}` });
+      if (!response.headersSent) send(response, 500, { kind: 'error', input: '', query: '', message: `Unexpected error: ${String(error)}` });
       else response.end();
     });
   });
@@ -55,13 +55,14 @@ async function handle(request: IncomingMessage, response: ServerResponse, open: 
   if (url.pathname === '/org') return organization(response, url.searchParams.get('org')?.trim() ?? '', github);
   if (url.pathname !== '/') return send(response, 404, { kind: 'not-found', path: url.pathname });
   const input = url.searchParams.get('repo')?.trim() ?? '';
+  const query = url.searchParams.get('q')?.trim() ?? '';
   if (!input) return send(response, 200, { kind: 'home' });
   try {
     const result = await scan(await open(input));
-    send(response, 200, { kind: 'result', input, result });
+    send(response, 200, { kind: 'result', input, query, result });
   } catch (error) {
     if (!(error instanceof AtlasError)) throw error;
-    send(response, 400, { kind: 'error', input, message: error.message });
+    send(response, 400, { kind: 'error', input, query, message: error.message });
   }
 }
 

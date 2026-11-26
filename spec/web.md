@@ -3,10 +3,11 @@
 Like the CLI, a *thin client*: each request scans **at once**; *nothing is stored*.
 
 ## Pages
-- `/`: the form, one field — a GitHub URL or a directory, as for `scan`
+- `/`: the form, at the top: a GitHub URL or a directory, as for `scan`; and a search of the skills
 - `/?repo=<GitHub URL | directory>`: the form, then the result
 - `/org`: the organization form, one field — a GitHub organization's name, or its `https://github.com/<org>` URL
 - `/org?org=<organization>`: the organization page ([below](#the-organization-page))
+- `/?repo=<…>&q=<text>`: the form, then only the skills that match the search
 - Anything else → *404*, a page saying so
 
 ## The result
@@ -33,11 +34,17 @@ All organization scans of one server share one limiter, since GitHub's limits ar
 - At most *8* requests in flight at once
 - A budget per rate-limit resource (`core`, `search`, `code_search`), from GitHub's `x-ratelimit-*` headers; parallel scans spend it together, never beyond it
 - A spent budget whose reset is *at most 65 s* away (code search: 10 a minute with `GITHUB_TOKEN`), or `retry-after`, or a *secondary rate limit* (a minute) → the requests wait, then go on; a request is retried at most twice
-- A spent budget whose reset is further away (without a token: 60 an hour) → the requests are *not sent*, and their repositories fail with `GitHub rate limit reached; not sent, try again at <time> (GITHUB_TOKEN raises the limit)`
+- A spent budget whose reset is further away (without a token: 60 an hour) → the requests are *not sent*, and their repositories fail with `GitHub rate limit reached; not sent, try again at <time> (GITHUB_TOKEN raises the limit)`## Search
+- A skill matches when its **name** or its **description** contains the text, ignoring case; the text is trimmed and taken literally, not as a pattern
+- The matching skills, in the same order, numbered from 1; above them, `M of N skills match "<text>"` and a link to show all
+- Every match in a name or a description is highlighted, in a `<mark>`
+- No skill matches → *No skills match "<text>"*; the warnings are still shown
+- An empty search shows every skill; a search without `repo` is the home page
+- The field keeps the text searched for
 
 ## The look
 A homepage from the early 2000s: starfield background, tables for layout, WordArt title, a marquee, *Under construction*, a blinking warning, a webring, *Best viewed in Netscape Navigator*.
-The counter in the footer counts the skills on the page — there are no visits to count.
+The counter in the footer counts the skills on the page, the matching ones when searching — there are no visits to count.
 Everything is embedded: the page loads nothing else, and has no scripts.
 
 ## Server
