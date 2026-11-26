@@ -42,6 +42,35 @@ export async function openGitHub(input: string, options: GitHubOptions): Promise
   };
 }
 
+/** An organization's name, or its `https://github.com/<org>` URL; as GitHub spells logins. */
+export function parseOrganization(input: string): string | undefined {
+  const match = /^(?:(?:https?:\/\/)?(?:www\.)?github\.com\/)?([a-z\d](?:[a-z\d-]{0,38}))\/?$/i.exec(input.trim());
+  return match?.[1];
+}
+
+/** A repository of an organization, as GitHub lists it. */
+export type OrganizationRepository = { id: string; name: string; url: string };
+
+export type Organization = { id: string; url: string; repositories: OrganizationRepository[] };
+
+/** Every repository the organization shows, by name, 100 a page. */
+export async function openOrganization(input: string, options: GitHubOptions): Promise<Organization> {
+  const name = parseOrganization(input);
+  if (!name) throw new AtlasError(`Not a GitHub organization: ${input}`);
+  const github = client(options);
+  const repositories: OrganizationRepository[] = [];
+  for (let page = 1; ; page++) {
+    const items = await github.json<{ name: string; full_name: string; html_url: string }[]>(
+      `${API}/orgs/${name}/repos?sort=full_name&per_page=100&page=${page}`,
+      `Organization not found: https://github.com/${name}`,
+    );
+    repositories.push(...items.map((item) => ({ id: item.full_name, name: item.name, url: item.html_url })));
+    if (items.length < 100) break;
+  }
+  const id = repositories[0]?.id.split('/')[0] ?? name;
+  return { id, url: `https://github.com/${id}`, repositories };
+}
+
 /** Code search looks at the whole default branch, 100 results a page. */
 async function searchPaths(github: Client, id: string): Promise<string[]> {
   const paths = new Set<string>(); // pages can repeat a result
@@ -101,6 +130,7 @@ function client({ fetch, token }: GitHubOptions) {
     try {
       return await fetch(url, init);
     } catch (error) {
+      if (error instanceof AtlasError) throw error; // a rate limit, before anything was sent
       throw new AtlasError(`Cannot reach GitHub: ${describe(error)}`);
     }
   }

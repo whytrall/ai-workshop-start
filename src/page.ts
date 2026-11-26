@@ -2,19 +2,31 @@
 // APIs and no scripts: the server renders it, the browser only shows it. Everything is embedded,
 // so the page loads nothing else.
 import { skillLink, type Skill } from './core/model.ts';
+import type { Organization } from './core/github.ts';
+import type { RepositoryScan } from './core/organization.ts';
 import type { ScanResult } from './core/scan.ts';
 
-/** What the page shows: the form alone, a scan's result, or why the scan failed. */
+/** What the page shows: a form alone, a scan's result, or why the scan failed. */
 export type PageState =
   | { kind: 'home' }
   | { kind: 'result'; input: string; query: string; result: ScanResult }
   | { kind: 'error'; input: string; query: string; message: string }
+  | { kind: 'org-home' }
+  | { kind: 'org-error'; input: string; message: string }
   | { kind: 'not-found'; path: string };
 
 export function renderPage(state: PageState): string {
-  const input = state.kind === 'result' || state.kind === 'error' ? state.input : '';
-  const query = state.kind === 'result' || state.kind === 'error' ? state.query : '';
+  const input = 'input' in state ? state.input : '';
+  const query = 'query' in state ? state.query : '';
   const title = state.kind === 'result' ? `${state.result.repository.id} - Skill Atlas` : 'Skill Atlas';
+  const kind = state.kind === 'org-home' || state.kind === 'org-error' ? 'org' : 'repo';
+  return `${top(title, form(kind, input, query))}
+  ${content(state)}
+${bottom(state.kind === 'result' ? filterSkills(state.result.skills, query).length : 0)}`;
+}
+
+/** Everything above what the page shows, up to its main cell. */
+function top(title: string, form: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,27 +46,22 @@ export function renderPage(state: PageState): string {
   <div class="nav-title">:: Navigation ::</div>
   <a href="/">&raquo; Home</a>
   <a href="/#scan">&raquo; Scan a repo</a>
+  <a href="/org">&raquo; Scan an organization</a>
   <a href="/?repo=https%3A%2F%2Fgithub.com%2FJetBrains%2Fkotlin">&raquo; Cool site: Kotlin</a>
   <div class="nav-title">:: Status ::</div>
   <div class="construction">UNDER<br>CONSTRUCTION</div>
   <div class="nav-note">Best viewed in<br>Netscape Navigator 4<br>at 800x600</div>
 </td>
 <td class="main">
-  <form id="scan" class="scan" method="get" action="/">
-    <fieldset>
-      <legend>Scan a repository</legend>
-      <label for="repo">GitHub URL or directory:</label><br>
-      <input id="repo" name="repo" type="text" size="48" value="${escapeHtml(input)}" placeholder="https://github.com/owner/repo">
-      <input type="submit" value="Scan!"><br>
-      <label for="q">Search the skills:</label><br>
-      <input id="q" name="q" type="text" size="48" value="${escapeHtml(query)}" placeholder="name or description">
-    </fieldset>
-  </form>
-  ${content(state)}
-</td>
+  ${form}`;
+}
+
+/** The main cell's end, and the footer with the counter of the skills on the page. */
+function bottom(skills: number): string {
+  return `</td>
 </tr>
 <tr><td colspan="2" class="footer">
-  ${counter(state)}
+  ${counter(skills)}
   <div class="webring">&laquo; Prev | <b>The Agent Skills Webring</b> | Next &raquo;</div>
   <div class="small">Made with Notepad &middot; No cookies, no guestbook, nothing stored &middot; &copy; Skill Atlas</div>
 </td></tr>
@@ -64,11 +71,38 @@ export function renderPage(state: PageState): string {
 `;
 }
 
+/** The form: a repository and a search of the skills at `/`, an organization at `/org`. */
+function form(kind: 'repo' | 'org', input: string, query = ''): string {
+  if (kind === 'org') {
+    return `<form id="scan" class="scan" method="get" action="/org">
+    <fieldset>
+      <legend>Scan an organization</legend>
+      <label for="org">GitHub organization:</label><br>
+      <input id="org" name="org" type="text" size="48" value="${escapeHtml(input)}" placeholder="JetBrains">
+      <input type="submit" value="Scan!">
+    </fieldset>
+  </form>`;
+  }
+  return `<form id="scan" class="scan" method="get" action="/">
+    <fieldset>
+      <legend>Scan a repository</legend>
+      <label for="repo">GitHub URL or directory:</label><br>
+      <input id="repo" name="repo" type="text" size="48" value="${escapeHtml(input)}" placeholder="https://github.com/owner/repo">
+      <input type="submit" value="Scan!"><br>
+      <label for="q">Search the skills:</label><br>
+      <input id="q" name="q" type="text" size="48" value="${escapeHtml(query)}" placeholder="name or description">
+    </fieldset>
+  </form>`;
+}
+
 function content(state: PageState): string {
   switch (state.kind) {
     case 'home':
       return `<div class="welcome"><img alt="" class="spinner" src="${STAR}"> Type a <b>GitHub URL</b> or a <b>directory</b> above and press <b>Scan!</b> <img alt="" class="spinner" src="${STAR}"></div>`;
+    case 'org-home':
+      return `<div class="welcome"><img alt="" class="spinner" src="${STAR}"> Type a <b>GitHub organization</b> above and press <b>Scan!</b> Every repository is scanned at once <img alt="" class="spinner" src="${STAR}"></div>`;
     case 'error':
+    case 'org-error':
       return `<div class="error"><div class="error-title">ERROR!!!</div>${escapeHtml(state.message)}</div>`;
     case 'not-found':
       return `<div class="error"><div class="error-title">404 - Page Not Found</div>There is no page at ${escapeHtml(state.path)}. <a href="/">Go home</a>.</div>`;
@@ -136,10 +170,82 @@ function matcher(query: string, capture = false): RegExp {
 }
 
 /** The odometer counts the skills on this page: there is nothing stored to count visitors with. */
-function counter(state: PageState): string {
-  const count = state.kind === 'result' ? filterSkills(state.result.skills, state.query).length : 0;
+function counter(count: number): string {
   const digits = String(count).padStart(6, '0').split('').map((d) => `<span>${d}</span>`).join('');
   return `<div class="counter-box">Skills on this page: <span class="counter">${digits}</span></div>`;
+}
+
+/**
+ * The organization page, sent in parts as its scans finish: `organizationStart` with the progress
+ * bar and every repository scanning, one `organizationProgress` per finished scan, and
+ * `organizationEnd`. There are no scripts: each part after the first is a style that moves the
+ * bar and turns a repository's indicator to OK or FAILED; later styles override earlier ones.
+ */
+export function organizationStart(organization: Organization, input: string): string {
+  const total = organization.repositories.length;
+  const rows = organization.repositories
+    .map((repository, index) => {
+      const link = `/?repo=${encodeURIComponent(repository.url)}`;
+      return `<tr class="${index % 2 ? 'odd' : 'even'}" id="repo-${index}">
+<td class="n">${index + 1}</td>
+<td class="name"><a href="${escapeHtml(link)}">${escapeHtml(repository.name)}</a></td>
+<td class="state"><span class="scanning"><img alt="" class="spinner" src="${STAR}"> scanning...</span><span class="ok">OK!</span><span class="failed">FAILED</span></td>
+<td class="detail"></td>
+</tr>`;
+    })
+    .join('\n');
+  const table = total
+    ? `<table class="skills repos" border="1" cellspacing="0" cellpadding="4">
+<tr><th>#</th><th>Repository</th><th>Status</th><th>Result</th></tr>
+${rows}
+</table>`
+    : `<p class="none">No repositories here... yet!</p>`;
+  return `${top(`${organization.id} - Skill Atlas`, form('org', input))}
+<h2 class="repo"><a href="${escapeHtml(organization.url)}">${escapeHtml(organization.id)}</a> &middot; ${plural(total, 'repository', 'repositories')}</h2>
+<div class="progress"><div class="progress-bar"><div class="progress-done"></div></div><div class="progress-text"></div></div>
+${progress(0, total)}
+${table}
+`;
+}
+
+/** One finished scan: its indicator, what it found or why it failed, and the bar. */
+export function organizationProgress(index: number, scanned: RepositoryScan, done: number, total: number): string {
+  const row = `#repo-${index}`;
+  const [state, detail] =
+    'result' in scanned
+      ? ['ok', [plural(scanned.result.skills.length, 'skill', 'skills'), ...(scanned.result.warnings.length ? [plural(scanned.result.warnings.length, 'warning', 'warnings')] : [])].join(', ')]
+      : ['failed', scanned.error];
+  return `<style>${row} .scanning{display:none}${row} .${state}{display:inline}${row} .detail::after{content:${cssString(detail)}}</style>
+${progress(done, total)}
+`;
+}
+
+/** Every scan is done: the totals, the failures in full, and the footer. */
+export function organizationEnd(scans: RepositoryScan[]): string {
+  const failed = scans.flatMap((scanned) => ('error' in scanned ? [scanned] : []));
+  const skills = scans.reduce((sum, scanned) => sum + ('result' in scanned ? scanned.result.skills.length : 0), 0);
+  const failures = failed.length
+    ? `<div class="warnings"><span class="blink">!! Failed !!</span><ul>${failed.map((f) => `<li><b>${escapeHtml(f.repository.id)}</b>: ${escapeHtml(f.error)}</li>`).join('')}</ul></div>`
+    : '';
+  return `<div class="done">Done! ${plural(scans.length, 'repository', 'repositories')} scanned: ${scans.length - failed.length} OK, ${failed.length} failed &middot; ${plural(skills, 'skill', 'skills')}</div>
+${failures}
+${bottom(skills)}`;
+}
+
+/** The progress bar at `done` of `total`. */
+function progress(done: number, total: number): string {
+  const percent = total ? Math.floor((done * 100) / total) : 100;
+  const text = `${done} of ${total} scanned (${percent}%)${done === total ? ' - done!' : ''}`;
+  return `<style>.progress-done{width:${percent}%}.progress-text::after{content:${cssString(text)}}</style>`;
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/** A quoted CSS string: everything but letters, digits and spaces escaped, so nothing ends the style. */
+export function cssString(text: string): string {
+  return `"${text.replace(/[^A-Za-z0-9 ]/gu, (c) => `\\${c.codePointAt(0)!.toString(16)} `)}"`;
 }
 
 /** HTML-escaped text, safe in element content and quoted attributes. */
@@ -206,6 +312,15 @@ mark { background: #ff00ff; color: #ffff00; font-weight: bold; }
 .warnings { margin-top: 12px; padding: 6px; background: #ffff99; color: #990000; border: 3px double #990000; }
 .blink { font-weight: bold; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { visibility: hidden; } }
+.progress { margin: 8px 0 12px; }
+.progress-bar { height: 20px; padding: 2px; background: #c0c0c0; border: 2px inset #fff; }
+.progress-done { height: 100%; background: repeating-linear-gradient(90deg, #000080 0 12px, #c0c0c0 12px 14px); }
+.progress-text { margin-top: 3px; text-align: center; color: #00ff00; font-family: "Courier New", monospace; font-weight: bold; }
+.repos td.state { white-space: nowrap; font-weight: bold; }
+.repos .ok, .repos .failed { display: none; }
+.repos .ok { color: #00ff00; } .repos .failed { color: #ff3333; }
+.repos td.detail { font-size: 11px; color: #fff; }
+.done { margin-top: 12px; padding: 6px; text-align: center; font-weight: bold; color: #000; background: #00ff00; border: 3px outset #99ff99; }
 .error { margin-top: 12px; padding: 10px; background: #fff; color: #cc0000; border: 4px ridge #ff0000; font-weight: bold; }
 .error-title { font-size: 22px; font-family: Impact, sans-serif; }
 .error a { color: #0000ee; }
