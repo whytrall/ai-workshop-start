@@ -1,0 +1,183 @@
+// The web view's HTML: one page, styled like a homepage from the early 2000s. Pure strings, no Node
+// APIs and no scripts: the server renders it, the browser only shows it. Everything is embedded,
+// so the page loads nothing else.
+import { skillLink, type Skill } from './core/model.ts';
+import type { ScanResult } from './core/scan.ts';
+
+/** What the page shows: the form alone, a scan's result, or why the scan failed. */
+export type PageState =
+  | { kind: 'home' }
+  | { kind: 'result'; input: string; result: ScanResult }
+  | { kind: 'error'; input: string; message: string }
+  | { kind: 'not-found'; path: string };
+
+export function renderPage(state: PageState): string {
+  const input = state.kind === 'result' || state.kind === 'error' ? state.input : '';
+  const title = state.kind === 'result' ? `${state.result.repository.id} - Skill Atlas` : 'Skill Atlas';
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<meta name="generator" content="Skill Atlas (Notepad)">
+<style>${STYLE}</style>
+</head>
+<body>
+<table class="frame" cellspacing="0" cellpadding="0" align="center">
+<tr><td colspan="2" class="header">
+  <h1 class="wordart">~*~ Skill Atlas ~*~</h1>
+  <marquee scrollamount="5">*** Welcome to the Skill Atlas!!! *** Every SKILL.md in a repository, on one page *** Sign my... no guestbook, nothing is stored ***</marquee>
+</td></tr>
+<tr>
+<td class="nav">
+  <div class="nav-title">:: Navigation ::</div>
+  <a href="/">&raquo; Home</a>
+  <a href="/#scan">&raquo; Scan a repo</a>
+  <a href="/?repo=https%3A%2F%2Fgithub.com%2FJetBrains%2Fkotlin">&raquo; Cool site: Kotlin</a>
+  <div class="nav-title">:: Status ::</div>
+  <div class="construction">UNDER<br>CONSTRUCTION</div>
+  <div class="nav-note">Best viewed in<br>Netscape Navigator 4<br>at 800x600</div>
+</td>
+<td class="main">
+  <form id="scan" class="scan" method="get" action="/">
+    <fieldset>
+      <legend>Scan a repository</legend>
+      <label for="repo">GitHub URL or directory:</label><br>
+      <input id="repo" name="repo" type="text" size="48" value="${escapeHtml(input)}" placeholder="https://github.com/owner/repo">
+      <input type="submit" value="Scan!">
+    </fieldset>
+  </form>
+  ${content(state)}
+</td>
+</tr>
+<tr><td colspan="2" class="footer">
+  ${counter(state)}
+  <div class="webring">&laquo; Prev | <b>The Agent Skills Webring</b> | Next &raquo;</div>
+  <div class="small">Made with Notepad &middot; No cookies, no guestbook, nothing stored &middot; &copy; Skill Atlas</div>
+</td></tr>
+</table>
+</body>
+</html>
+`;
+}
+
+function content(state: PageState): string {
+  switch (state.kind) {
+    case 'home':
+      return `<div class="welcome"><img alt="" class="spinner" src="${STAR}"> Type a <b>GitHub URL</b> or a <b>directory</b> above and press <b>Scan!</b> <img alt="" class="spinner" src="${STAR}"></div>`;
+    case 'error':
+      return `<div class="error"><div class="error-title">ERROR!!!</div>${escapeHtml(state.message)}</div>`;
+    case 'not-found':
+      return `<div class="error"><div class="error-title">404 - Page Not Found</div>There is no page at ${escapeHtml(state.path)}. <a href="/">Go home</a>.</div>`;
+    case 'result':
+      return result(state.result);
+  }
+}
+
+function result({ repository, skills, warnings }: ScanResult): string {
+  const count = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
+  const commit = repository.commit ? `<div class="commit">Scanned commit: <tt>${escapeHtml(repository.commit)}</tt></div>` : '';
+  const rows = skills.map((skill, index) => row(repository, skill, index)).join('\n');
+  const table = skills.length
+    ? `<table class="skills" border="1" cellspacing="0" cellpadding="4">
+<tr><th>#</th><th>Skill</th><th>Description</th></tr>
+${rows}
+</table>`
+    : `<p class="none">No skills here... yet!</p>`;
+  const warningList = warnings.length
+    ? `<div class="warnings"><span class="blink">!! Warning !!</span><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+    : '';
+  return `<h2 class="repo"><a href="${escapeHtml(repository.url)}">${escapeHtml(repository.id)}</a> &middot; ${count}</h2>
+${commit}
+${table}
+${warningList}`;
+}
+
+function row(repository: ScanResult['repository'], skill: Skill, index: number): string {
+  const link = skillLink(repository, skill);
+  const copies = skill.copies.length ? `<div class="copies">also in ${skill.copies.map(escapeHtml).join(', ')}</div>` : '';
+  return `<tr class="${index % 2 ? 'odd' : 'even'}">
+<td class="n">${index + 1}</td>
+<td class="name"><a href="${escapeHtml(link)}">${escapeHtml(skill.name)}</a>${copies}</td>
+<td class="description">${skill.description ? escapeHtml(skill.description) : '<i>(no description)</i>'}</td>
+</tr>`;
+}
+
+/** The odometer counts the skills on this page: there is nothing stored to count visitors with. */
+function counter(state: PageState): string {
+  const count = state.kind === 'result' ? state.result.skills.length : 0;
+  const digits = String(count).padStart(6, '0').split('').map((d) => `<span>${d}</span>`).join('');
+  return `<div class="counter-box">Skills on this page: <span class="counter">${digits}</span></div>`;
+}
+
+/** HTML-escaped text, safe in element content and quoted attributes. */
+export function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** A little yellow star, embedded. */
+const STAR =
+  'data:image/svg+xml,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><polygon fill="#ff0" stroke="#f60" points="12,1 15,9 23,9 17,14 19,23 12,18 5,23 7,14 1,9 9,9"/></svg>',
+  );
+
+const STYLE = `
+body {
+  margin: 12px; color: #ffff99; font-family: Verdana, "Comic Sans MS", Tahoma, sans-serif; font-size: 13px;
+  background-color: #000033;
+  background-image:
+    radial-gradient(1px 1px at 20px 30px, #fff, transparent),
+    radial-gradient(1px 1px at 80px 120px, #ccf, transparent),
+    radial-gradient(2px 2px at 150px 60px, #fff, transparent),
+    radial-gradient(1px 1px at 200px 170px, #ffc, transparent);
+  background-size: 230px 200px;
+}
+a { color: #00ffff; } a:visited { color: #ff99ff; } a:hover { color: #ff0; background: #f0f; }
+.frame { width: 780px; border: 4px ridge #c0c0c0; background: #000066; }
+.header { background: linear-gradient(#330099, #000066); text-align: center; padding: 8px; border-bottom: 3px groove #c0c0c0; }
+.wordart {
+  margin: 4px 0; font-family: Impact, "Arial Black", sans-serif; font-size: 44px; letter-spacing: 2px;
+  color: #ffcc00; text-shadow: 3px 3px 0 #ff0066, 6px 6px 0 #330066;
+}
+marquee { color: #00ff00; font-family: "Courier New", monospace; font-weight: bold; }
+.nav { width: 170px; vertical-align: top; background: #003366; border-right: 3px groove #c0c0c0; padding: 8px; }
+.nav a { display: block; margin: 3px 0; font-weight: bold; }
+.nav-title { margin: 10px 0 4px; color: #fff; background: #0066cc; border: 2px outset #3399ff; padding: 2px; text-align: center; font-weight: bold; }
+.nav-note { margin-top: 10px; font-size: 10px; color: #ccc; text-align: center; }
+.construction {
+  margin: 6px 0; padding: 6px; color: #000; font-weight: bold; text-align: center; border: 2px solid #000;
+  background: repeating-linear-gradient(45deg, #ffcc00 0 10px, #000 10px 20px);
+  text-shadow: 0 0 3px #ffcc00, 0 0 3px #ffcc00, 0 0 3px #ffcc00;
+}
+.main { vertical-align: top; padding: 12px; }
+fieldset { border: 2px groove #c0c0c0; color: #fff; }
+legend { color: #ff0; font-weight: bold; }
+input[type=text] { font-family: "Courier New", monospace; border: 2px inset #c0c0c0; background: #fff; color: #000; }
+input[type=submit] { font-weight: bold; background: #c0c0c0; color: #000; border: 2px outset #fff; cursor: pointer; }
+input[type=submit]:active { border-style: inset; }
+.welcome { margin-top: 20px; text-align: center; font-size: 15px; }
+.spinner { width: 20px; height: 20px; vertical-align: middle; animation: spin 2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.repo { color: #ff9900; font-family: "Times New Roman", serif; font-size: 22px; border-bottom: 2px dashed #ff9900; }
+.commit { font-size: 11px; color: #ccc; margin-bottom: 8px; }
+.skills { width: 100%; border-color: #c0c0c0; background: #000033; }
+.skills th { background: #660099; color: #fff; border: 2px outset #9966cc; }
+.skills tr.even { background: #000044; } .skills tr.odd { background: #001a66; }
+.skills td.n { text-align: center; color: #00ff00; font-family: "Courier New", monospace; }
+.skills td.name { font-weight: bold; white-space: nowrap; }
+.copies { font-weight: normal; font-size: 10px; color: #ccc; }
+.description { color: #fff; }
+.none { text-align: center; font-size: 16px; }
+.warnings { margin-top: 12px; padding: 6px; background: #ffff99; color: #990000; border: 3px double #990000; }
+.blink { font-weight: bold; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { visibility: hidden; } }
+.error { margin-top: 12px; padding: 10px; background: #fff; color: #cc0000; border: 4px ridge #ff0000; font-weight: bold; }
+.error-title { font-size: 22px; font-family: Impact, sans-serif; }
+.error a { color: #0000ee; }
+.footer { text-align: center; padding: 8px; border-top: 3px groove #c0c0c0; background: #000033; }
+.counter { display: inline-block; background: #000; border: 2px inset #808080; padding: 1px; }
+.counter span { display: inline-block; width: 12px; margin: 0 1px; background: #222; color: #ff3300; font-family: "Courier New", monospace; font-weight: bold; }
+.webring { margin: 6px 0; color: #ff99ff; }
+.small { font-size: 10px; color: #999; }
+`;
