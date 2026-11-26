@@ -19,7 +19,7 @@ export type WebServer = { url: string; close(): Promise<void> };
 export async function serveWeb(options: WebOptions): Promise<WebServer> {
   const server = createServer((request, response) => {
     handle(request, response, options.open).catch((error) => {
-      if (!response.headersSent) send(response, 500, { kind: 'error', input: '', message: `Unexpected error: ${String(error)}` });
+      if (!response.headersSent) send(response, 500, { kind: 'error', input: '', query: '', message: `Unexpected error: ${String(error)}` });
     });
   });
   const host = options.host ?? '127.0.0.1';
@@ -42,13 +42,14 @@ async function handle(request: IncomingMessage, response: ServerResponse, open: 
   const url = new URL(request.url ?? '/', 'http://localhost');
   if (url.pathname !== '/') return send(response, 404, { kind: 'not-found', path: url.pathname });
   const input = url.searchParams.get('repo')?.trim() ?? '';
+  const query = url.searchParams.get('q')?.trim() ?? '';
   if (!input) return send(response, 200, { kind: 'home' });
   try {
     const result = await scan(await open(input));
-    send(response, 200, { kind: 'result', input, result });
+    send(response, 200, { kind: 'result', input, query, result });
   } catch (error) {
     if (!(error instanceof AtlasError)) throw error;
-    send(response, 400, { kind: 'error', input, message: error.message });
+    send(response, 400, { kind: 'error', input, query, message: error.message });
   }
 }
 
