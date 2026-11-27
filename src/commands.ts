@@ -40,7 +40,7 @@ async function scanCommand(args: string[], context: Context) {
   if (args.length !== 1) throw new AtlasError('Usage: skill-atlas scan <GitHub URL | directory>');
   const result = await scan(await context.open(args[0]));
   printRepository(result.repository, result.skills, context);
-  for (const warning of result.warnings) context.error(`warning: ${warning}`);
+  for (const warning of result.warnings) context.error(printable(`warning: ${warning}`));
 }
 
 async function webCommand(args: string[], context: Context) {
@@ -52,13 +52,20 @@ async function webCommand(args: string[], context: Context) {
 }
 
 /** `<owner>/<repo> · N skills`, then each skill's name, first sentence and link. */
-function printRepository(repository: Repository, skills: Skill[], { print }: Context) {
+function printRepository(repository: Repository, skills: Skill[], context: Context) {
+  // What a scanned repository says reaches the terminal only as text, never as escape sequences.
+  const print = (text: string) => context.print(printable(text));
   print(`${repository.id} · ${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`);
   for (const skill of skills) {
     print(skill.description ? `${skill.name} — ${firstSentence(skill.description)}` : skill.name);
     print(`  ${skillLink(repository, skill)}`);
     if (skill.copies.length > 0) print(`  also in ${skill.copies.join(', ')}`);
   }
+}
+
+/** Control characters (C0, DEL, C1: ESC, BEL, CSI…) shown escaped, as `\x1b`, so they cannot drive the terminal. */
+function printable(text: string): string {
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
 }
 
 function firstSentence(text: string): string {
