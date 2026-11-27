@@ -27,13 +27,23 @@ export function parseSkill(text: string): ParsedSkill {
   // The leading newline keeps YAML's line numbers equal to the file's.
   const document = parseDocument(`\n${lines.slice(1, end).join('\n')}`);
   const [error] = document.errors;
-  if (error) return fallback(`malformed front matter: ${error.message.split('\n')[0].replace(/:$/, '')}`, body);
-  const data: unknown = document.toJS();
+  if (error) return malformed(error, body);
+  let data: unknown;
+  try {
+    // Throws on front matter that parses but cannot be built, like an alias bomb.
+    data = document.toJS();
+  } catch (error) {
+    return malformed(error instanceof Error ? error : new Error(String(error)), body);
+  }
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     return fallback('front matter is not a mapping', body);
   }
   const { name, description, ...properties } = data as Record<string, unknown>;
   return { name: asText(name) || undefined, description: asText(description), properties, body: trim(body) };
+}
+
+function malformed(error: Error, body: string): ParsedSkill {
+  return fallback(`malformed front matter: ${error.message.split('\n')[0].replace(/:$/, '')}`, body);
 }
 
 function fallback(reason: string, body: string): ParsedSkill {

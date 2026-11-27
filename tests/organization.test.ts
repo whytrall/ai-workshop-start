@@ -8,7 +8,7 @@ import { rateLimit } from '../src/core/ratelimit.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
 import { cssString } from '../src/page.ts';
 import { serveWeb } from '../src/web.ts';
-import { open } from './helpers.ts';
+import { ALIAS_BOMB, open } from './helpers.ts';
 
 const API = 'https://api.github.com';
 const SHA = 'abc123';
@@ -153,6 +153,17 @@ test('/org?org=: the repositories, each scanned with its own outcome; the bar at
   assert.equal(html.match(/<\/style>/g)!.length, html.match(/<style>/g)!.length);
   assert.match(html, /Skills on this page: <span class="counter">(<span>0<\/span>){5}<span>3<\/span><\/span>/);
   assert.match(html, /<\/html>\n$/);
+});
+
+test('/org?org=: a YAML alias bomb in one repository → that repository is ok with a warning, not an unexpected error', async (t) => {
+  const recording = organization('Bombed', {
+    mined: { files: { '.claude/skills/x/SKILL.md': ALIAS_BOMB, '.claude/skills/ok/SKILL.md': '---\ndescription: Fine.\n---\n' } },
+  });
+  const web = await server(t, replay(recording));
+  const { status, html } = await get(web.url, 'Bombed');
+  assert.equal(status, 200);
+  assert.deepEqual(outcome(html, 0), { state: 'ok', detail: '2 skills, 1 warning' });
+  assert.match(html, /<div class="done">Done! 1 repository scanned: 1 OK, 0 failed &middot; 2 skills<\/div>/);
 });
 
 test('the scans run in parallel, and the page shows each one as it finishes', async (t) => {

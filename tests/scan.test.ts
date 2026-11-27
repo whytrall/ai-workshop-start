@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { openGitHub } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
-import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
+import { ALIAS_BOMB, atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
 
 const fixture = await atlas(['scan', FIXTURE]);
 const example = await atlas(['scan', 'github.com/JetBrains/example']);
@@ -23,6 +23,18 @@ test('malformed front matter → the directory name, no description and a warnin
   assert.equal(
     parsed.warning,
     'malformed front matter: Nested mappings are not allowed in compact mappings at line 3, column 14; using the directory name',
+  );
+});
+
+test('front matter too costly to build (a YAML alias bomb) is malformed, not a crash', () => {
+  const parsed = parseSkill(ALIAS_BOMB);
+  assert.equal(parsed.name, undefined);
+  assert.equal(parsed.description, '');
+  assert.deepEqual(parsed.properties, {});
+  assert.equal(parsed.body, '# Bomb');
+  assert.equal(
+    parsed.warning,
+    'malformed front matter: Excessive alias count indicates a resource exhaustion attack; using the directory name',
   );
 });
 

@@ -43,3 +43,18 @@ export async function atlas(args: string[]) {
   });
   return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
 }
+
+/**
+ * A SKILL.md whose front matter is an alias bomb: `j` expands to 10 × 9⁹ items. The YAML parser
+ * refuses to build it, so it is malformed front matter, named `bomb` only on paper.
+ */
+export const ALIAS_BOMB = [
+  '---',
+  'a: &a [x,x,x,x,x,x,x,x,x,x]',
+  ...'bcdefghij'.split('').map((key, i) => `${key}: &${key} [${Array(9).fill(`*${'abcdefghij'[i]}`).join(',')}]`),
+  'name: bomb',
+  'description: Never read.',
+  '---',
+  '# Bomb',
+  '',
+].join('\n');

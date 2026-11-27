@@ -21,7 +21,7 @@ Skill: id = `repo:path`, name, description, commit, copies
 - **GitHub API**, no clone; *under 5 s* for intellij-community
 - The name: front matter, else the folder
 - The link pins the *scanned commit*
-- Malformed front matter, or none at all, → a *warning*, the scan goes on; the folder's name is used
+- Malformed front matter, or none at all, → a *warning*, the scan goes on; the folder's name is used. Front matter that parses but is too costly to read (a YAML *alias bomb*: too many aliases) counts as malformed
 - A `SKILL.md` listed but missing at the scanned commit → a *warning*, skipped
 - GitHub's tree too large to list at once → only the four roots are read, with a *warning*. The same rule applies to what is read. `GITHUB_TOKEN` searches the whole repository and applies the same rule.
 - Unreachable repository → a clear message, exit code 1
