@@ -55,6 +55,8 @@ async function handle(request: IncomingMessage, response: ServerResponse, open: 
     return;
   }
   const url = new URL(request.url ?? '/', 'http://localhost');
+  // A HEAD has no body to serve, so nothing is scanned: the status and headers of the page, at once.
+  if (request.method === 'HEAD') return head(response, url.pathname === '/' || url.pathname === '/org' ? 200 : 404);
   if (url.pathname === '/org') return organization(response, url.searchParams.get('org')?.trim() ?? '', github);
   if (url.pathname === '/cluster') {
     const input = url.searchParams.get('repo')?.trim() ?? '';
@@ -102,7 +104,7 @@ async function organization(response: ServerResponse, input: string, { limit, ..
     if (!(error instanceof AtlasError)) throw error;
     return send(response, 400, { kind: 'org-error', input, message: error.message });
   }
-  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  response.writeHead(200, HEADERS);
   response.write(organizationStart(found, input));
   let done = 0;
   const total = found.repositories.length;
@@ -113,7 +115,13 @@ async function organization(response: ServerResponse, input: string, { limit, ..
   if (!response.destroyed) response.end(organizationEnd(scans));
 }
 
+const HEADERS = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
+
 function send(response: ServerResponse, status: number, state: PageState) {
-  response.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+  response.writeHead(status, HEADERS);
   response.end(renderPage(state));
+}
+
+function head(response: ServerResponse, status: number) {
+  response.writeHead(status, HEADERS).end();
 }
