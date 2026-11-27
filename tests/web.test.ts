@@ -112,6 +112,30 @@ test('all text is HTML-escaped: names, descriptions, paths in links', async (t) 
   assert.ok(typed.html.includes('value="&#34;&#62;&#60;script&#62;x&#60;/script&#62;"'));
 });
 
+test('long unbroken names and descriptions wrap inside their cells, in full', async (t) => {
+  // The page has no scripts to measure it with, so the styles that keep it in the window are
+  // checked: a fixed table layout, and long words broken anywhere in the main cell.
+  const name = 'A'.repeat(400);
+  const description = 'B'.repeat(1500);
+  const url = `https://example.com/${'path/'.repeat(80)}`;
+  const root = project(t, {
+    '.claude/skills/x/SKILL.md': `---\nname: ${name}\ndescription: ${description}\n---\n`,
+    '.claude/skills/y/SKILL.md': `---\nname: y\ndescription: See ${url} for the steps.\n---\n`,
+  });
+  const { status, html } = await page(root);
+  assert.equal(status, 200);
+  // Wrapped, not truncated: every character is on the page.
+  assert.deepEqual(rows(html), [`1 ${name} ${description}`, `2 y See ${url} for the steps.`]);
+  assert.match(html, /<table class="skills result" [^>]*>\n<tr><th class="n">#<\/th><th class="name">Skill<\/th><th>Description<\/th><\/tr>/);
+  const style = html.match(/<style>([\s\S]*?)<\/style>/)![1];
+  assert.match(style, /\.result \{ table-layout: fixed; \}/);
+  assert.match(style, /\.result th\.n \{ width: [^}]+\}/);
+  assert.match(style, /\.result th\.name \{ width: \d+%; \}/);
+  assert.match(style, /\.main \{[^}]*overflow-wrap: anywhere;[^}]*\}/);
+  // Nothing in the skills table refuses to wrap.
+  assert.doesNotMatch(style, /\.(?:skills|result) [^{]*\{[^}]*white-space: nowrap/);
+});
+
 test('no skills → No skills here... yet!', async (t) => {
   const root = project(t, { 'README.md': '# Nothing\n', 'docs/skills/x/SKILL.md': '---\nname: x\n---\n' });
   const { status, html } = await page(root);
@@ -206,7 +230,7 @@ test('search: the field at the top, under the repository field, then the results
   const home = await page();
   assert.match(home.html, /<input id="repo"[^>]*>[\s\S]*<input id="q" name="q" type="text" size="48" value=""/);
   const { html } = await search(FIXTURE, 'commit');
-  assert.ok(html.indexOf('id="q"') < html.indexOf('class="skills"'));
+  assert.ok(html.indexOf('id="q"') < html.indexOf('class="skills result"'));
   assert.match(html, /<input id="q" name="q" type="text" size="48" value="commit"/);
 });
 

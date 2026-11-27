@@ -13,6 +13,7 @@ Like the CLI, a *thin client*: each request scans **at once**; *nothing is store
 ## The result
 - `<owner>/<repo> · N skills`, linked to the repository; the scanned commit
 - A table, sorted by **name** as in [analysis.md](analysis.md): each skill's name, linked to its file; its *full* description, or *(no description)*; `also in <paths>` for copies
+- Long unbroken words (a long name, description or URL) wrap inside their cells, in full: the page is never wider than its frame
 - Warnings in a box under the table, as `scan` prints them to stderr
 - No skills → *No skills here... yet!*
 - Unreachable repository, or not a URL or a directory → the message, in an error box, status *400*
