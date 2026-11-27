@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { after, test, type TestContext } from 'node:test';
 import { createBrowserBackend } from '../src/browser.ts';
 import { serveWeb } from '../src/web.ts';
-import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
+import { ALIAS_BOMB, atlas, CLI, EXAMPLE_COMMIT, FIXTURE, open } from './helpers.ts';
 
 const server = await serveWeb({ open, github: { fetch: () => Promise.reject(new Error('offline')) }, port: 0 });
 after(() => server.close());
@@ -76,6 +76,21 @@ test('./fixture: every skill by name, linked, full description or none, and the 
   assert.match(html, /<span class="counter"><span>0<\/span><span>0<\/span><span>0<\/span><span>0<\/span><span>0<\/span><span>3<\/span><\/span>/);
   // The field keeps what was scanned.
   assert.ok(html.includes(`value="${FIXTURE}"`));
+});
+
+test('a YAML alias bomb in a SKILL.md → the page, the folder name and a warning, not a 500', async (t) => {
+  const root = project(t, {
+    '.claude/skills/x/SKILL.md': ALIAS_BOMB,
+    '.claude/skills/ok/SKILL.md': '---\ndescription: Fine.\n---\n',
+  });
+  const { status, html } = await page(root);
+  assert.equal(status, 200);
+  assert.deepEqual(rows(html), ['1 ok Fine.', '2 x (no description)']);
+  assert.ok(
+    html.includes(
+      '<li>.claude/skills/x/SKILL.md: malformed front matter: Excessive alias count indicates a resource exhaustion attack; using the directory name</li>',
+    ),
+  );
 });
 
 test('GitHub: the repository, the scanned commit and the pinned link, as scan prints them', async () => {
