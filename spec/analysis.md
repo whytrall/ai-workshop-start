@@ -26,3 +26,4 @@ Skill: id = `repo:path`, name, description, commit, copies
 - GitHub's tree too large to list at once → only the four roots are read, with a *warning*. The same rule applies to what is read. `GITHUB_TOKEN` searches the whole repository and applies the same rule.
 - A local folder that cannot be read, inside the scanned directory → a *warning*, skipped; the scan goes on
 - Unreachable repository → a clear message, exit code 1 (a local directory that cannot be read itself is unreachable)
+- `.` or `..` as the owner or the repository (`https://github.com/../rate_limit`, `https://github.com/a/..`) → not a GitHub repository URL, the same message as for any other input that is neither a URL nor a directory, exit code 1; *nothing is asked of GitHub*
