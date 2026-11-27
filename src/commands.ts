@@ -58,8 +58,11 @@ async function clusterCommand(args: string[], context: Context) {
   for (const cluster of clusters) {
     print(`${cluster.title} · ${cluster.skills.length} ${cluster.skills.length === 1 ? 'skill' : 'skills'}`);
     if (cluster.topics.length > 0) print(`  topics: ${cluster.topics.join(', ')}`);
-    print(`  skills: ${cluster.skills.join(', ')}`);
     if (cluster.sharedWords.length > 0) print(`  shared words: ${cluster.sharedWords.join(', ')}`);
+    for (const skill of cluster.skills) {
+      print(`  ${skill.description ? `${skill.name} — ${firstSentence(skill.description)}` : skill.name}`);
+      print(`    ${skillLink(result.repository, skill)}`);
+    }
   }
   for (const warning of [...result.warnings, ...warnings]) context.error(`warning: ${warning}`);
 }

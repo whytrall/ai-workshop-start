@@ -1,6 +1,6 @@
 // Skills clustering: a model groups the skills by topic; the shared words are counted here.
 import { AtlasError } from './errors.ts';
-import type { Skill } from './model.ts';
+import { sortSkills, type Skill } from './model.ts';
 
 /** Asks a model: a prompt in, its text answer out. The CLI's is `claude -p`; tests replay a recording. */
 export type Model = (prompt: string) => Promise<string>;
@@ -9,8 +9,8 @@ export type Cluster = {
   title: string;
   /** What the model says the cluster is about. */
   topics: string[];
-  /** Skill names, sorted. */
-  skills: string[];
+  /** The cluster's skills, in the order of `scan`. */
+  skills: Skill[];
   /** Words in the name or description of at least two of the cluster's skills, most common first. */
   sharedWords: string[];
 };
@@ -65,7 +65,7 @@ function makeCluster(title: string, topics: string[], members: Skill[]): Cluster
   return {
     title,
     topics,
-    skills: members.map((skill) => skill.name).sort(),
+    skills: sortSkills(members),
     sharedWords: sharedWords(members),
   };
 }

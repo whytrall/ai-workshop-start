@@ -16,7 +16,7 @@ process.exitCode = await run(process.argv.slice(2), {
   model: claude,
   serve: async (port) => {
     try {
-      return (await serveWeb({ open, github: { fetch, token }, port })).url;
+      return (await serveWeb({ open, model: claude, github: { fetch, token }, port })).url;
     } catch (error) {
       throw new AtlasError(`Cannot start the web view on port ${port}: ${error instanceof Error ? error.message : String(error)}`);
     }
