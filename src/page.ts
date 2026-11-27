@@ -1,6 +1,7 @@
 // The web view's HTML: one page, styled like a homepage from the early 2000s. Pure strings, no Node
 // APIs and no scripts: the server renders it, the browser only shows it. Everything is embedded,
 // so the page loads nothing else.
+import type { Clustering } from './core/cluster.ts';
 import { skillLink, type Skill } from './core/model.ts';
 import type { Organization } from './core/github.ts';
 import type { RepositoryScan } from './core/organization.ts';
@@ -10,6 +11,7 @@ import type { ScanResult } from './core/scan.ts';
 export type PageState =
   | { kind: 'home' }
   | { kind: 'result'; input: string; query: string; result: ScanResult }
+  | { kind: 'cluster'; input: string; result: ScanResult; clustering: Clustering }
   | { kind: 'error'; input: string; query: string; message: string }
   | { kind: 'org-home' }
   | { kind: 'org-error'; input: string; message: string }
@@ -18,11 +20,11 @@ export type PageState =
 export function renderPage(state: PageState): string {
   const input = 'input' in state ? state.input : '';
   const query = 'query' in state ? state.query : '';
-  const title = state.kind === 'result' ? `${state.result.repository.id} - Skill Atlas` : 'Skill Atlas';
+  const title = state.kind === 'result' || state.kind === 'cluster' ? `${state.result.repository.id} - Skill Atlas` : 'Skill Atlas';
   const kind = state.kind === 'org-home' || state.kind === 'org-error' ? 'org' : 'repo';
   return `${top(title, form(kind, input, query))}
   ${content(state)}
-${bottom(state.kind === 'result' ? filterSkills(state.result.skills, query).length : 0)}`;
+${bottom(state.kind === 'result' ? filterSkills(state.result.skills, query).length : state.kind === 'cluster' ? state.result.skills.length : 0)}`;
 }
 
 /** Everything above what the page shows, up to its main cell. */
@@ -108,6 +110,8 @@ function content(state: PageState): string {
       return `<div class="error"><div class="error-title">404 - Page Not Found</div>There is no page at ${escapeHtml(state.path)}. <a href="/">Go home</a>.</div>`;
     case 'result':
       return result(state.result, state.input, state.query);
+    case 'cluster':
+      return cluster(state.result, state.input, state.clustering);
   }
 }
 
@@ -127,13 +131,42 @@ ${rows}
     : skills.length
       ? `<p class="none">No skills match &quot;${escapeHtml(query)}&quot;</p>`
       : `<p class="none">No skills here... yet!</p>`;
+  const clusterLink = skills.length ? `<div class="links"><a href="/cluster?repo=${escapeHtml(encodeURIComponent(input))}">Cluster these skills by topic</a></div>` : '';
   const warningList = warnings.length
     ? `<div class="warnings"><span class="blink">!! Warning !!</span><ul>${warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
     : '';
   return `<h2 class="repo"><a href="${escapeHtml(repository.url)}">${escapeHtml(repository.id)}</a> &middot; ${count}</h2>
 ${commit}
 ${searched}
+${clusterLink}
 ${table}
+${warningList}`;
+}
+
+/** The clusters: each with its topics, shared words and its skills in a table. */
+function cluster({ repository, skills, warnings }: ScanResult, input: string, { clusters, warnings: clusterWarnings }: Clustering): string {
+  const count = `${skills.length} ${skills.length === 1 ? 'skill' : 'skills'}`;
+  const sections = clusters
+    .map((c) => {
+      const info = [
+        c.topics.length ? `<div class="topics">Topics: ${c.topics.map(escapeHtml).join(', ')}</div>` : '',
+        c.sharedWords.length ? `<div class="shared">Shared words: ${c.sharedWords.map(escapeHtml).join(', ')}</div>` : '',
+      ].join('');
+      return `<h3 class="cluster">${escapeHtml(c.title)} &middot; ${plural(c.skills.length, 'skill', 'skills')}</h3>
+${info}
+<table class="skills" border="1" cellspacing="0" cellpadding="4">
+<tr><th>#</th><th>Skill</th><th>Description</th></tr>
+${c.skills.map((skill, index) => row(repository, skill, index, '')).join('\n')}
+</table>`;
+    })
+    .join('\n');
+  const all = [...warnings, ...clusterWarnings];
+  const warningList = all.length
+    ? `<div class="warnings"><span class="blink">!! Warning !!</span><ul>${all.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+    : '';
+  return `<h2 class="repo"><a href="${escapeHtml(repository.url)}">${escapeHtml(repository.id)}</a> &middot; ${count} in ${plural(clusters.length, 'cluster', 'clusters')}</h2>
+<div class="links"><a href="/?repo=${escapeHtml(encodeURIComponent(input))}">show the plain list</a></div>
+${clusters.length ? sections : '<p class="none">No skills here... yet!</p>'}
 ${warningList}`;
 }
 
@@ -307,7 +340,8 @@ input[type=submit]:active { border-style: inset; }
 .copies { font-weight: normal; font-size: 10px; color: #ccc; }
 .description { color: #fff; }
 .none { text-align: center; font-size: 16px; }
-.search { margin-bottom: 8px; color: #00ff00; }
+.search, .links, .topics, .shared { margin-bottom: 8px; color: #00ff00; }
+.cluster { color: #ff99ff; font-family: "Times New Roman", serif; }
 mark { background: #ff00ff; color: #ffff00; font-weight: bold; }
 .warnings { margin-top: 12px; padding: 6px; background: #ffff99; color: #990000; border: 3px double #990000; }
 .blink { font-weight: bold; animation: blink 1s steps(1) infinite; }
