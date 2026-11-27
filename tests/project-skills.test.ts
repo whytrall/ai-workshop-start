@@ -143,6 +143,26 @@ test('the description: its first sentence, folded lines joined; without one, the
   );
 });
 
+test('an indented --- inside a block scalar does not close the front matter; only one at column 0 does', async (t) => {
+  const { root, href } = project(t, {
+    '.claude/skills/x/SKILL.md': '---\nname: blk\ndescription: |\n  first line\n  ---\n  after the rule\n---\n# Body\n',
+    '.claude/skills/later/SKILL.md': '---\ndescription: |\n  before the rule\n  ---\nname: later-key\n---   \n',
+  });
+  const result = await atlas(['scan', root]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.equal(
+    result.stdout,
+    [
+      'my-project · 2 skills',
+      'blk — first line --- after the rule',
+      `  ${href}/.claude/skills/x/SKILL.md`,
+      'later-key — before the rule ---',
+      `  ${href}/.claude/skills/later/SKILL.md`,
+    ].join('\n'),
+  );
+});
+
 test('no front matter, or front matter never closed → a warning, the folder name, and the scan goes on', async (t) => {
   const { root, href } = project(t, {
     '.claude/skills/nofm/SKILL.md': '# Just a body\n',
