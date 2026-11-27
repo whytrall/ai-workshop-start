@@ -129,6 +129,11 @@ test('unreachable repository → the message in an error box, status 400', async
   const offline = await page('https://github.com/JetBrains/not-answered');
   assert.equal(offline.status, 400);
   assert.match(offline.html, /Cannot reach GitHub: not recorded: https:\/\/api\.github\.com\/repos\/JetBrains\/not-answered/);
+
+  // `..` would make `fetch` ask https://api.github.com/rate_limit instead of a repository.
+  const dotted = await page('https://github.com/../rate_limit');
+  assert.equal(dotted.status, 400);
+  assert.match(dotted.html, /<div class="error"><div class="error-title">ERROR!!!<\/div>Not a GitHub URL or a readable directory: https:\/\/github\.com\/\.\.\/rate_limit<\/div>/);
 });
 
 test('any other page → 404; only GET and HEAD', async () => {

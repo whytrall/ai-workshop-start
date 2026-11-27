@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
-import { openGitHub } from '../src/core/github.ts';
+import { openGitHub, parseGitHubUrl } from '../src/core/github.ts';
 import { parseSkill } from '../src/core/parse.ts';
 import { replay } from '../src/core/replay.ts';
 import { atlas, CLI, EXAMPLE_COMMIT, FIXTURE } from './helpers.ts';
@@ -79,6 +79,36 @@ test('unreachable repository → a clear message, exit code 1', async () => {
   const offline = await atlas(['scan', 'https://github.com/JetBrains/not-answered']);
   assert.equal(offline.code, 1);
   assert.match(offline.stderr, /^Cannot reach GitHub: not recorded: https:\/\/api\.github\.com\/repos\/JetBrains\/not-answered$/);
+});
+
+test('`.` or `..` as owner or repository → not a GitHub URL, exit code 1, nothing asked of GitHub', async () => {
+  const dotted = [
+    'https://github.com/../rate_limit',
+    'https://github.com/a/..',
+    'https://github.com/a/../',
+    'https://github.com/a/...git',
+    'https://github.com/./a',
+    'https://github.com/a/.',
+    'www.github.com/../rate_limit',
+  ];
+  const asked: string[] = [];
+  const fetch = (url: string) => {
+    asked.push(url);
+    return Promise.reject(new Error(`asked: ${url}`));
+  };
+  for (const url of dotted) {
+    assert.equal(parseGitHubUrl(url), undefined, url);
+    await assert.rejects(openGitHub(url, { fetch, token: 'secret' }), { message: `Not a GitHub repository URL: ${url}` });
+    const scanned = await atlas(['scan', url]);
+    assert.equal(scanned.code, 1, url);
+    assert.equal(scanned.stdout, '', url);
+    assert.equal(scanned.stderr, `Not a GitHub URL or a readable directory: ${url}`);
+  }
+  assert.deepEqual(asked, []);
+
+  // Dots inside a name are still names.
+  assert.deepEqual(parseGitHubUrl('https://github.com/a/.github'), { owner: 'a', repo: '.github' });
+  assert.deepEqual(parseGitHubUrl('https://github.com/a.b/c..d.git'), { owner: 'a.b', repo: 'c..d' });
 });
 
 test('rate limit → a message that asks for GITHUB_TOKEN', async () => {
