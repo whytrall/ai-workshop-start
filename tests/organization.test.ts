@@ -61,6 +61,21 @@ async function get(base: string, org?: string) {
   return { status: response.status, html: await response.text() };
 }
 
+test('HEAD /org?org=<org> → the headers at once, nothing asked of GitHub', async (t) => {
+  const asked: string[] = [];
+  const recorded = replay(EXAMPLE);
+  const web = await server(t, (url, init) => (asked.push(String(url)), recorded(url, init)));
+  const response = await fetch(new URL('/org?org=Example', web.url), { method: 'HEAD' });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(await response.text(), '');
+  assert.deepEqual(asked, []);
+  // A GET still scans.
+  assert.match((await get(web.url, 'Example')).html, /Done! 3 repositories scanned/);
+  assert.ok(asked.length > 0);
+});
+
 /** The repositories table's rows, as text. */
 function rows(html: string): string[] {
   return [...html.matchAll(/<tr class="(?:even|odd)" id="repo-\d+">([\s\S]*?)<\/tr>/g)].map((m) =>

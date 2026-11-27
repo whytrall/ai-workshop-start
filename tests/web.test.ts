@@ -142,6 +142,36 @@ test('any other page → 404; only GET and HEAD', async () => {
   await posted.body?.cancel();
 });
 
+test('HEAD → the status and headers, without scanning anything', async (t) => {
+  const opened: string[] = [];
+  const asked: string[] = [];
+  const web = await serveWeb({
+    open: (input) => (opened.push(input), open(input)),
+    github: { fetch: (url) => (asked.push(String(url)), Promise.reject(new Error('offline'))) },
+    port: 0,
+  });
+  t.after(() => web.close());
+  const cases: [string, number][] = [
+    ['/', 200],
+    [`/?repo=${encodeURIComponent(FIXTURE)}`, 200],
+    ['/?repo=github.com/JetBrains/example&q=commit', 200],
+    // Not scanned, so not known to fail: a GET would answer 400.
+    [`/?repo=${encodeURIComponent(join(FIXTURE, 'no-such-directory'))}`, 200],
+    ['/org', 200],
+    ['/org?org=JetBrains', 200],
+    ['/guestbook.html', 404],
+  ];
+  for (const [path, status] of cases) {
+    const response = await fetch(new URL(path, web.url), { method: 'HEAD' });
+    assert.equal(response.status, status, path);
+    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8', path);
+    assert.equal(response.headers.get('cache-control'), 'no-store', path);
+    assert.equal(await response.text(), '', path);
+  }
+  assert.deepEqual(opened, []);
+  assert.deepEqual(asked, []);
+});
+
 test('the server is local only', () => {
   assert.match(server.url, /^http:\/\/127\.0\.0\.1:\d+\/$/);
 });
