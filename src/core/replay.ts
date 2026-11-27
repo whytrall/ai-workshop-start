@@ -20,3 +20,14 @@ export function replay(recording: Recording, fallback?: Fetch): Fetch {
     throw new Error(`not recorded: ${url}`);
   };
 }
+
+/** Recorded model answers by prompt. */
+export type ModelRecording = Record<string, string>;
+
+/** A model that answers from a recording; an unrecorded prompt fails, so a replay never calls a real model. */
+export function replayModel(recording: ModelRecording): (prompt: string) => Promise<string> {
+  return async (prompt) => {
+    if (Object.hasOwn(recording, prompt)) return recording[prompt];
+    throw new Error(`not recorded: ${prompt}`);
+  };
+}

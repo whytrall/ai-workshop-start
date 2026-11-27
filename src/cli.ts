@@ -4,6 +4,7 @@
 import { AtlasError } from './core/errors.ts';
 import { run } from './commands.ts';
 import { openGitHub, parseGitHubUrl } from './core/github.ts';
+import { claude } from './claude.ts';
 import { openDirectory } from './local.ts';
 import { serveWeb } from './web.ts';
 
@@ -12,6 +13,7 @@ const open = (input: string) => (parseGitHubUrl(input) ? openGitHub(input, { fet
 
 process.exitCode = await run(process.argv.slice(2), {
   open,
+  model: claude,
   serve: async (port) => {
     try {
       return (await serveWeb({ open, github: { fetch, token }, port })).url;
