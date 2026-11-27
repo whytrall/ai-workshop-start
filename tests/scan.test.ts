@@ -70,6 +70,12 @@ test('unreachable repository → a clear message, exit code 1', async () => {
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /^Not a GitHub URL or a readable directory: .*no-such-directory\n$/);
 
+  // An empty argument is neither, not the current directory (FIXTURE, here, has skills).
+  const empty = spawnSync(process.execPath, [CLI, 'scan', ''], { cwd: FIXTURE, encoding: 'utf8' });
+  assert.equal(empty.status, 1);
+  assert.equal(empty.stdout, '');
+  assert.equal(empty.stderr, "Not a GitHub URL or a readable directory: ''\n");
+
   // What GitHub answers for a repository that does not exist.
   const notFound = replay({ 'https://api.github.com/repos/JetBrains/no-such-repository': { status: 404, body: { message: 'Not Found' } } });
   await assert.rejects(openGitHub('https://github.com/JetBrains/no-such-repository', { fetch: notFound }), {
