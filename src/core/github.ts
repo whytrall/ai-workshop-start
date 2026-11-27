@@ -14,10 +14,12 @@ export type GitHubOptions = {
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
 
-/** `https://github.com/owner/repo`, with or without the scheme, a trailing slash or `.git`. */
+/** `https://github.com/owner/repo`, with or without the scheme, a trailing slash or `.git`; never `.` or `..` as a name. */
 export function parseGitHubUrl(input: string): { owner: string; repo: string } | undefined {
   const match = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(input.trim());
-  return match ? { owner: match[1], repo: match[2] } : undefined;
+  // `.` and `..` are not names: `fetch` would collapse them into another API endpoint.
+  if (!match || [match[1], match[2]].some((name) => name === '.' || name === '..')) return undefined;
+  return { owner: match[1], repo: match[2] };
 }
 
 /** Resolves the default branch to a commit and lists the files that may be skills. */

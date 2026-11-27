@@ -9,8 +9,8 @@ A **project skill** is a file `<root>/<name>/SKILL.md`, where `<root>` is one of
 - **The file name is exact**: `skill.md`, `SKILL.MD` and `SKILL.md.bak` are not skills.
 - **Copies are one skill**: the same `<name>` in several roots is one skill. Its home is the first of its paths in order, and the others are its copies, listed as `also in` ([cli.md](cli.md)).
 - **Not the project's files**: a symbolic link, even one to a `SKILL.md`, is not a skill.
-- **Name**: the front matter's `name` (trimmed; a number counts as text), else the folder's name. An empty name, or one that is not text (a list, a mapping, a boolean), gives the folder's name, with no warning.
-- **Description**: the front matter's `description`. Without one, the skill has no description and is printed by name alone.
+- **Name**: the front matter's `name` (trimmed; a number counts as text, as written: `1.10` stays `1.10`, `0x1F` stays `0x1F`), else the folder's name. An empty name, or one that is not text (a list, a mapping, a boolean), gives the folder's name, with no warning.
+- **Description**: the front matter's `description` (a number, too, as written). Without one, the skill has no description and is printed by name alone.
 - **Front matter**: the YAML between a first line `---` and the next line that is `---` at column 0 (trailing spaces allowed). An indented `---`, as inside a block scalar (`description: |`), is part of the value and does not close it.
 - **Path with spaces or symbols**: the link keeps the path, percent-encoded.
 - **Order**: by name, then by path.
@@ -24,4 +24,6 @@ Skill: id = `repo:path`, name, description, commit, copies
 - Malformed front matter, or none at all, → a *warning*, the scan goes on; the folder's name is used. Front matter that parses but is too costly to read (a YAML *alias bomb*: too many aliases) counts as malformed
 - A `SKILL.md` listed but missing at the scanned commit → a *warning*, skipped
 - GitHub's tree too large to list at once → only the four roots are read, with a *warning*. The same rule applies to what is read. `GITHUB_TOKEN` searches the whole repository and applies the same rule.
-- Unreachable repository → a clear message, exit code 1
+- A local folder that cannot be read, inside the scanned directory → a *warning*, skipped; the scan goes on
+- Unreachable repository → a clear message, exit code 1 (a local directory that cannot be read itself is unreachable)
+- `.` or `..` as the owner or the repository (`https://github.com/../rate_limit`, `https://github.com/a/..`) → not a GitHub repository URL, the same message as for any other input that is neither a URL nor a directory, exit code 1; *nothing is asked of GitHub*

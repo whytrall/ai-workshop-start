@@ -13,26 +13,39 @@ export async function openDirectory(input: string): Promise<Source> {
   if (input === '') throw new AtlasError("Not a GitHub URL or a readable directory: ''");
   const root = resolve(input);
   const name = basename(root);
+  const warnings: string[] = [];
   let paths: string[];
   try {
-    paths = await walk(root, '');
+    paths = await walk(root, '', [], warnings);
   } catch {
     throw new AtlasError(`Not a GitHub URL or a readable directory: ${input}`);
   }
   return {
     repository: { id: name, organization: 'local', name, url: pathToFileURL(root).href, commit: '' },
     paths,
-    warnings: [],
+    warnings,
     read: (path) => readFile(join(root, path)).then((bytes) => new Uint8Array(bytes), () => undefined),
   };
 }
 
-/** Every regular file under the directory, as a path relative to the root. */
-async function walk(root: string, directory: string, paths: string[] = []): Promise<string[]> {
+/**
+ * Every regular file under the directory, as a path relative to the root. Only the root must be
+ * readable: a folder inside it that cannot be read is skipped, with a warning.
+ */
+async function walk(root: string, directory: string, paths: string[], warnings: string[]): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(join(root, directory), { withFileTypes: true });
+  } catch (error) {
+    if (!directory) throw error;
+    const code = (error as NodeJS.ErrnoException).code;
+    warnings.push(`${directory}/: cannot read the directory${code ? ` (${code})` : ''}; skipped`);
+    return paths;
+  }
   // One list for the whole walk: a large repository has more files than a spread can pass.
-  for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
+  for (const entry of entries) {
     const path = directory ? `${directory}/${entry.name}` : entry.name;
-    if (entry.isDirectory() && !SKIPPED.has(entry.name)) await walk(root, path, paths);
+    if (entry.isDirectory() && !SKIPPED.has(entry.name)) await walk(root, path, paths, warnings);
     else if (entry.isFile()) paths.push(path);
   }
   return paths;
