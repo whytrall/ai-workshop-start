@@ -23,4 +23,5 @@ Skill: id = `repo:path`, name, description, commit, copies
 - Malformed front matter, or none at all, → a *warning*, the scan goes on; the folder's name is used
 - A `SKILL.md` listed but missing at the scanned commit → a *warning*, skipped
 - GitHub's tree too large to list at once → only the four roots are read, with a *warning*. The same rule applies to what is read. `GITHUB_TOKEN` searches the whole repository and applies the same rule.
-- Unreachable repository → a clear message, exit code 1
+- A local folder that cannot be read, inside the scanned directory → a *warning*, skipped; the scan goes on
+- Unreachable repository → a clear message, exit code 1 (a local directory that cannot be read itself is unreachable)

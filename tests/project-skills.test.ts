@@ -1,7 +1,7 @@
 // The edge cases of "What a project skill is" in spec/analysis.md, through the same commands the CLI
 // runs. Local projects are real folders built by each test; GitHub answers from a recording.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -184,6 +184,66 @@ async function scanGitHubTree(url: string, recording: Recording) {
   });
   return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') };
 }
+
+/** Makes these folders of the project unreadable for the test's duration; they are readable again for clean-up. */
+function lock(root: string, folders: string[]) {
+  for (const folder of folders) mkdirSync(join(root, folder), { recursive: true });
+  for (const folder of folders) chmodSync(join(root, folder), 0o000);
+  // Called in a finally: project()'s clean-up cannot remove a folder it cannot read.
+  return () => folders.forEach((folder) => chmodSync(join(root, folder), 0o755));
+}
+
+// Root reads every folder, so these cases need another user.
+const asRoot = process.getuid?.() === 0 && 'root can read an unreadable folder';
+
+test('an unreadable folder in the directory is skipped with a warning; the skills are listed', { skip: asRoot }, async (t) => {
+  const { root, href } = project(t, {
+    '.claude/skills/ok/SKILL.md': skillFile('description: Fine.'),
+    'docs/readme.md': 'Docs.',
+  });
+  const unlock = lock(root, ['secret', 'docs/private']);
+  try {
+    const result = await atlas(['scan', root]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.stdout, ['my-project · 1 skill', 'ok — Fine.', `  ${href}/.claude/skills/ok/SKILL.md`].join('\n'));
+    // In the order the file system lists the folders.
+    assert.deepEqual(result.stderr.split('\n').sort(), [
+      'warning: docs/private/: cannot read the directory (EACCES); skipped',
+      'warning: secret/: cannot read the directory (EACCES); skipped',
+    ]);
+  } finally {
+    unlock();
+  }
+});
+
+test('an unreadable skill folder is skipped with a warning; the other skills are listed', { skip: asRoot }, async (t) => {
+  const { root, href } = project(t, {
+    '.claude/skills/ok/SKILL.md': skillFile('description: Fine.'),
+    '.github/skills/hidden/SKILL.md': skillFile('description: Cannot be read.'),
+  });
+  const unlock = lock(root, ['.github/skills/hidden']);
+  try {
+    const result = await atlas(['scan', root]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.stdout, ['my-project · 1 skill', 'ok — Fine.', `  ${href}/.claude/skills/ok/SKILL.md`].join('\n'));
+    assert.equal(result.stderr, 'warning: .github/skills/hidden/: cannot read the directory (EACCES); skipped');
+  } finally {
+    unlock();
+  }
+});
+
+test('an unreadable scanned directory → a clear message, exit code 1', { skip: asRoot }, async (t) => {
+  const { root } = project(t, { '.claude/skills/ok/SKILL.md': skillFile('description: Fine.') });
+  const unlock = lock(root, ['.']);
+  try {
+    const result = await atlas(['scan', root]);
+    assert.equal(result.code, 1);
+    assert.equal(result.stdout, '');
+    assert.equal(result.stderr, `Not a GitHub URL or a readable directory: ${root}`);
+  } finally {
+    unlock();
+  }
+});
 
 test('GitHub: a symbolic link is not a skill; a SKILL.md missing at the commit is skipped with a warning', async () => {
   const api = 'https://api.github.com/repos/JetBrains/layout';
