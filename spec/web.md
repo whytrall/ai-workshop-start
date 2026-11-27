@@ -50,4 +50,6 @@ Everything is embedded: the page loads nothing else, and has no scripts.
 ## Server
 - Local only: it listens on `127.0.0.1`, since it can read this machine's directories
 - Port `0` takes any free port; the printed URL has the real one
+- Only `GET` and `HEAD`; any other method → *405*, with `Allow: GET, HEAD`
+- `HEAD` → the page's status and headers, **without scanning**: there is no body to serve, so nothing is read and nothing is asked of GitHub. *200* for `/` and `/org`, whatever they are asked to scan; *404* for anything else
 - A port in use → a clear message, exit code 1
