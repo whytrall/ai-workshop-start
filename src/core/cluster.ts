@@ -35,25 +35,33 @@ export async function clusterSkills(skills: Skill[], model: Model): Promise<Clus
   if (skills.length === 0) return { clusters: [], warnings: [] };
   const answer = await model(clusterPrompt(skills));
   const raw = parseAnswer(answer);
-  const byName = new Map<string, Skill>();
-  for (const skill of skills) byName.set(skill.name, skill);
+  const byName = new Map<string, Skill[]>();
+  for (const skill of skills) {
+    const matches = byName.get(skill.name) ?? [];
+    matches.push(skill);
+    byName.set(skill.name, matches);
+  }
   const placed = new Set<string>();
   const warnings: string[] = [];
   const clusters: Cluster[] = [];
   for (const entry of raw) {
     const members: Skill[] = [];
     for (const name of entry.skills) {
-      const skill = byName.get(name);
-      if (!skill) warnings.push(`the model named an unknown skill: ${name}`);
-      else if (placed.has(name)) warnings.push(`the model put ${name} in several clusters; kept in the first`);
+      const matches = byName.get(name);
+      if (!matches) warnings.push(`the model named an unknown skill: ${name}`);
+      else if (matches.every((skill) => placed.has(skill.id))) warnings.push(`the model put ${name} in several clusters; kept in the first`);
       else {
-        placed.add(name);
-        members.push(skill);
+        for (const skill of matches) {
+          if (!placed.has(skill.id)) {
+            placed.add(skill.id);
+            members.push(skill);
+          }
+        }
       }
     }
     if (members.length > 0) clusters.push(makeCluster(entry.title, entry.topics, members));
   }
-  const left = skills.filter((skill) => !placed.has(skill.name));
+  const left = skills.filter((skill) => !placed.has(skill.id));
   if (left.length > 0) {
     warnings.push(`the model left out: ${left.map((skill) => skill.name).join(', ')}`);
     clusters.push(makeCluster(UNCLUSTERED, [], left));

@@ -16,6 +16,7 @@ Build tooling · 4 skills
   shared words: gradle, plugin
 ```
 - Clusters in the model's order; under each, its skills as `scan` prints them (name, first sentence, link, `also in`), sorted; `topics` and `shared words` lines only when not empty
+- Different skills with the same name all belong to the first cluster that names them; none is dropped. Placement is tracked by skill ID.
 - A skill the model left out → the cluster *Unclustered*, with a *warning*
 - An unknown skill name in the answer → ignored, a *warning*; a skill in several clusters → kept in the first, a *warning*
 - Warnings (these, and the scan's) go to *stderr*

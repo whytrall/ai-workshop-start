@@ -135,3 +135,40 @@ test('web /cluster without a model → an error box, status 400', async () => {
     await web.close();
   }
 });
+
+// Exercise the scan, CLI and HTTP boundary with distinct folders sharing a name.
+test('same-named skills survive clustering, copies print, and leftovers stay visible', async () => {
+  const files: Record<string, string> = {
+    '.claude/skills/a/SKILL.md': '---\nname: deploy\ndescription: Release deployment tooling.\n---',
+    '.agents/skills/a/SKILL.md': '---\nname: deploy\ndescription: Release deployment tooling.\n---',
+    '.github/skills/b/SKILL.md': '---\nname: deploy\ndescription: Release deployment automation.\n---',
+    '.claude/skills/c/SKILL.md': '---\nname: lint\n---',
+  };
+  const source = {
+    repository: { id: 'example/repo', organization: 'example', name: 'repo', url: 'https://github.com/example/repo', commit: 'abc' },
+    paths: Object.keys(files), warnings: [],
+    read: async (path: string) => new TextEncoder().encode(files[path]),
+  };
+  const answer = async () => JSON.stringify({ clusters: [{ title: 'Ops', skills: ['deploy'] }, { title: 'Repeated', skills: ['deploy'] }] });
+  const stdout: string[] = [], stderr: string[] = [];
+  assert.equal(await run(['cluster', 'example'], { open: async () => source, model: answer, print: (s) => stdout.push(s), error: (s) => stderr.push(s) }), 0);
+  const text = stdout.join('\n');
+  assert.match(text, /3 skills in 2 clusters/);
+  assert.equal(stdout.filter((s) => s.startsWith('  deploy')).length, 2);
+  assert.match(text, /also in .claude\/skills\/a\/SKILL.md/);
+  assert.ok(text.indexOf('shared words:') > text.indexOf('/.github/skills/b/SKILL.md'));
+  assert.match(text, /Unclustered.*\n  lint/s);
+  assert.match(stderr.join('\n'), /several clusters/);
+  assert.match(stderr.join('\n'), /left out: lint/);
+  const web = await serveWeb({ open: async () => source, model: answer, github: { fetch: () => Promise.reject(new Error('offline')) }, port: 0 });
+  try {
+    const response = await fetch(new URL('/cluster?repo=example', web.url));
+    const html = await response.text();
+    assert.equal(response.status, 200);
+    assert.match(html, /3 skills in 2 clusters/);
+    assert.match(html, /\/.agents\/skills\/a\/SKILL.md/);
+    assert.match(html, /\/.github\/skills\/b\/SKILL.md/);
+    assert.match(html, /also in .claude\/skills\/a\/SKILL.md/);
+    assert.match(html, /Unclustered/);
+  } finally { await web.close(); }
+});
