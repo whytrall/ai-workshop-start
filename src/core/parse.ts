@@ -1,4 +1,4 @@
-import { parseDocument } from 'yaml';
+import { type Document, isAlias, isScalar, parseDocument } from 'yaml';
 
 /** What a SKILL.md says about itself. */
 export type ParsedSkill = {
@@ -32,15 +32,29 @@ export function parseSkill(text: string): ParsedSkill {
     return fallback('front matter is not a mapping', body);
   }
   const { name, description, ...properties } = data as Record<string, unknown>;
-  return { name: asText(name) || undefined, description: asText(description), properties, body: trim(body) };
+  return {
+    name: asText(document, 'name', name) || undefined,
+    description: asText(document, 'description', description),
+    properties,
+    body: trim(body),
+  };
 }
 
 function fallback(reason: string, body: string): ParsedSkill {
   return { description: '', properties: {}, body: trim(body), warning: `${reason}; using the directory name` };
 }
 
-function asText(value: unknown): string {
-  return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
+/**
+ * Text as is; a number as written in the file (`1.10`, not `1.1`; `0x1F`,
+ * not `31`); anything else is not text.
+ */
+function asText(document: Document, key: string, value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value !== 'number') return '';
+  let node: unknown = document.get(key, true);
+  if (isAlias(node)) node = node.resolve(document);
+  const source = isScalar(node) ? node.source : undefined;
+  return (typeof source === 'string' ? source : String(value)).trim();
 }
 
 /** Without the blank lines around it; the first line keeps its indentation. */

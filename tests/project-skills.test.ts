@@ -124,6 +124,47 @@ test('the name: front matter, trimmed; a number counts as text; empty, a list or
   );
 });
 
+test('a numeric name is the text as written: 1.10 stays 1.10, 0x1F stays 0x1F, and 1.10 and 1.1 stay apart', async (t) => {
+  const { root, href } = project(t, {
+    '.claude/skills/ten/SKILL.md': skillFile('name: 1.10\ndescription: Ten.'),
+    '.claude/skills/one/SKILL.md': skillFile('name: 1.1\ndescription: One.'),
+    '.claude/skills/hex/SKILL.md': skillFile('name: 0x1F\ndescription: Hex.'),
+    '.claude/skills/big/SKILL.md': skillFile('name: 12345678901234567890\ndescription: Big.'),
+    '.claude/skills/commented/SKILL.md': skillFile('name: 2.50 # a comment\ndescription: Commented.'),
+    '.claude/skills/alias/SKILL.md': skillFile('version: &v 3.0\nname: *v\ndescription: Alias.'),
+  });
+  const result = await atlas(['scan', root]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.equal(
+    result.stdout,
+    [
+      'my-project · 6 skills',
+      '0x1F — Hex.',
+      `  ${href}/.claude/skills/hex/SKILL.md`,
+      '1.1 — One.',
+      `  ${href}/.claude/skills/one/SKILL.md`,
+      '1.10 — Ten.',
+      `  ${href}/.claude/skills/ten/SKILL.md`,
+      '12345678901234567890 — Big.',
+      `  ${href}/.claude/skills/big/SKILL.md`,
+      '2.50 — Commented.',
+      `  ${href}/.claude/skills/commented/SKILL.md`,
+      '3.0 — Alias.',
+      `  ${href}/.claude/skills/alias/SKILL.md`,
+    ].join('\n'),
+  );
+});
+
+test('a numeric description is the text as written', async (t) => {
+  const { root, href } = project(t, {
+    '.claude/skills/hex/SKILL.md': skillFile('name: hex\ndescription: 0x1F'),
+  });
+  const result = await atlas(['scan', root]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout, ['my-project · 1 skill', 'hex — 0x1F', `  ${href}/.claude/skills/hex/SKILL.md`].join('\n'));
+});
+
 test('the description: its first sentence, folded lines joined; without one, the name alone', async (t) => {
   const { root, href } = project(t, {
     '.claude/skills/folded/SKILL.md': '---\ndescription: >\n  Write things.\n  Then more.\n---\n',
