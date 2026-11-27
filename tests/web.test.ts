@@ -230,7 +230,14 @@ test('search: by name or description, ignoring case, the matches highlighted and
   const one = await search(FIXTURE, 'checklist');
   assert.deepEqual(found(one.html), ['1 release-checklist (no description)']);
   assert.match(one.html, /release-<mark>checklist<\/mark><\/a>/);
-  assert.match(one.html, /1 of 3 skills matches/);
+  assert.match(one.html, /<div class="search">1 of 3 skills match &quot;<b>checklist<\/b>&quot;/);
+});
+
+test('search: the verb follows the skill count, not the match count — one match still reads "skills match"', async () => {
+  const { html } = await search(FIXTURE, 'code-style');
+  assert.equal(found(html).length, 1);
+  assert.match(html, /<div class="search">1 of 3 skills match &quot;<b>code-style<\/b>&quot;/);
+  assert.doesNotMatch(html, /matches &quot;/);
 });
 
 test('search: no match → No skills match, the warnings still shown', async () => {
