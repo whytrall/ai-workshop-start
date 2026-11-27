@@ -9,7 +9,7 @@ import { test, type TestContext } from 'node:test';
 import { run } from '../src/commands.ts';
 import { openGitHub } from '../src/core/github.ts';
 import { replay, type Recording } from '../src/core/replay.ts';
-import { atlas, EXAMPLE_COMMIT } from './helpers.ts';
+import { ALIAS_BOMB, atlas, EXAMPLE_COMMIT } from './helpers.ts';
 
 /** A local project named `my-project`, with these files (path → text) and symbolic links (link → target). */
 function project(t: TestContext, files: Record<string, string>, links: Record<string, string> = {}) {
@@ -160,6 +160,23 @@ test('no front matter, or front matter never closed → a warning, the folder na
       'warning: .claude/skills/nofm/SKILL.md: no front matter; using the directory name',
       'warning: .claude/skills/open/SKILL.md: front matter without a closing ---; using the directory name',
     ].join('\n'),
+  );
+});
+
+test('a YAML alias bomb in the front matter → a warning, the folder name, and the scan goes on', async (t) => {
+  const { root, href } = project(t, {
+    '.claude/skills/x/SKILL.md': ALIAS_BOMB,
+    '.claude/skills/ok/SKILL.md': skillFile('description: Fine.'),
+  });
+  const result = await atlas(['scan', root]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(
+    result.stdout,
+    ['my-project · 2 skills', 'ok — Fine.', `  ${href}/.claude/skills/ok/SKILL.md`, 'x', `  ${href}/.claude/skills/x/SKILL.md`].join('\n'),
+  );
+  assert.equal(
+    result.stderr,
+    'warning: .claude/skills/x/SKILL.md: malformed front matter: Excessive alias count indicates a resource exhaustion attack; using the directory name',
   );
 });
 
