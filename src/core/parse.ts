@@ -14,13 +14,14 @@ export type ParsedSkill = {
 
 /**
  * Reads the YAML front matter between the leading `---` lines and the body
- * after it. Malformed front matter is not fatal: the skill keeps its directory
- * name and gets a warning.
+ * after it. Only a `---` at column 0 closes the front matter, as in YAML; an
+ * indented one belongs to the value around it. Malformed front matter is not
+ * fatal: the skill keeps its directory name and gets a warning.
  */
 export function parseSkill(text: string): ParsedSkill {
   const lines = text.split(/\r?\n/);
   if (lines[0].trim() !== '---') return fallback('no front matter', text);
-  const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
+  const end = lines.findIndex((line, index) => index > 0 && line.trimEnd() === '---');
   if (end < 0) return fallback('front matter without a closing ---', text);
   const body = lines.slice(end + 1).join('\n');
   // The leading newline keeps YAML's line numbers equal to the file's.
