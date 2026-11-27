@@ -124,8 +124,8 @@ function result({ repository, skills, warnings }: ScanResult, input: string, que
     ? `<div class="search">${shown.length} of ${count} match &quot;<b>${escapeHtml(query)}</b>&quot; &middot; <a href="/?repo=${escapeHtml(encodeURIComponent(input))}">show all</a></div>`
     : '';
   const table = shown.length
-    ? `<table class="skills" border="1" cellspacing="0" cellpadding="4">
-<tr><th>#</th><th>Skill</th><th>Description</th></tr>
+    ? `<table class="skills result" border="1" cellspacing="0" cellpadding="4">
+<tr><th class="n">#</th><th class="name">Skill</th><th>Description</th></tr>
 ${rows}
 </table>`
     : skills.length
@@ -321,7 +321,7 @@ marquee { color: #00ff00; font-family: "Courier New", monospace; font-weight: bo
   background: repeating-linear-gradient(45deg, #ffcc00 0 10px, #000 10px 20px);
   text-shadow: 0 0 3px #ffcc00, 0 0 3px #ffcc00, 0 0 3px #ffcc00;
 }
-.main { vertical-align: top; padding: 12px; }
+.main { vertical-align: top; padding: 12px; overflow-wrap: anywhere; }
 fieldset { border: 2px groove #c0c0c0; color: #fff; }
 legend { color: #ff0; font-weight: bold; }
 input[type=text] { font-family: "Courier New", monospace; border: 2px inset #c0c0c0; background: #fff; color: #000; }
@@ -336,7 +336,10 @@ input[type=submit]:active { border-style: inset; }
 .skills th { background: #660099; color: #fff; border: 2px outset #9966cc; }
 .skills tr.even { background: #000044; } .skills tr.odd { background: #001a66; }
 .skills td.n { text-align: center; color: #00ff00; font-family: "Courier New", monospace; }
-.skills td.name { font-weight: bold; white-space: nowrap; }
+.skills td.name { font-weight: bold; }
+.result { table-layout: fixed; }
+.result th.n { width: 2.5em; } .result th.name { width: 30%; }
+.repos td.name { white-space: nowrap; }
 .copies { font-weight: normal; font-size: 10px; color: #ccc; }
 .description { color: #fff; }
 .none { text-align: center; font-size: 16px; }
