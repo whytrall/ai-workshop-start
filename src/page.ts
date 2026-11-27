@@ -117,7 +117,7 @@ function result({ repository, skills, warnings }: ScanResult, input: string, que
   const shown = filterSkills(skills, query);
   const rows = shown.map((skill, index) => row(repository, skill, index, query)).join('\n');
   const searched = query && skills.length
-    ? `<div class="search">${shown.length} of ${count} ${shown.length === 1 ? 'matches' : 'match'} &quot;<b>${escapeHtml(query)}</b>&quot; &middot; <a href="/?repo=${escapeHtml(encodeURIComponent(input))}">show all</a></div>`
+    ? `<div class="search">${shown.length} of ${count} match &quot;<b>${escapeHtml(query)}</b>&quot; &middot; <a href="/?repo=${escapeHtml(encodeURIComponent(input))}">show all</a></div>`
     : '';
   const table = shown.length
     ? `<table class="skills" border="1" cellspacing="0" cellpadding="4">
