@@ -13,3 +13,4 @@ build-tools-bump-gradle-api — Bumps the Gradle API…
 - Sorted by **name**; the description's *first sentence*
 - `also in <paths>` for copies; warnings go to *stderr*
 - Neither a GitHub URL nor a readable directory (an empty argument too, not the current directory): an error, exit code 1
+- **Control characters** (ESC, BEL, newlines… C0, DEL, C1) in what a repository says — names, descriptions, paths, warnings — are shown escaped, as `\x1b`: the output cannot drive the terminal
