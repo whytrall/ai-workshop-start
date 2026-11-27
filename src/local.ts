@@ -9,6 +9,8 @@ const SKIPPED = new Set(['.git', 'node_modules']);
 
 /** A local checkout as a repository: named after its directory, linked with file:// URLs. */
 export async function openDirectory(input: string): Promise<Source> {
+  // resolve('') is the current directory: an empty argument names no directory.
+  if (input === '') throw new AtlasError("Not a GitHub URL or a readable directory: ''");
   const root = resolve(input);
   const name = basename(root);
   let paths: string[];
