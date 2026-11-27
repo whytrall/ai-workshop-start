@@ -18,5 +18,6 @@ http://127.0.0.1:8000/org scans every repository of a GitHub organization at onc
 
 Set `GITHUB_TOKEN` for a higher GitHub rate limit. `npm test` runs the tests.
 
+- [spec/](spec/): what it does. `./skill-atlas cluster <repo>` groups skills by topic with `claude -p` ([spec/cluster.md](spec/cluster.md)).
 - [spec/](spec/): what it does. [AGENTS.md](AGENTS.md): the definition of done.
 - [fixture/](fixture/README.md): a small repository for the tests.
